@@ -52,42 +52,58 @@ function renderSummaryTabs(active = "M1") {
 }
 
 function renderSummaryContent(mod) {
-  const box = document.getElementById("summaryContent");
-  const data = SUMMARY[mod];
-  if (!data) { box.textContent = 'Ringkasan belum dimuat. Pastikan file summary_M'+mod+'.js sudah ter-load.'; return; }
-  box.innerHTML = "";
+  const box = document.getElementById("summaryContent")
+  const data = MODULE_SUMMARIES[mod]
 
-  box.appendChild(el("div", { class:"q" }, data.title));
+  if (!data) {
+    box.textContent = `Ringkasan belum dimuat. Pastikan file summary_${mod}.js sudah ter-load.`
+    return
+  }
 
-  // sections
-  data.sections.forEach((sec, idx) => {
-    const card = el("div", { class:"card", style:"margin:12px 0;" });
-    card.appendChild(el("div", { style:"font-weight:700; margin-bottom:8px;" }, sec.h));
-    const list = el("ul");
-    (sec.items || []).forEach((t) => list.appendChild(el("li", {}, t)));
-    if (sec.items && sec.items.length) card.appendChild(list);
+  box.innerHTML = ""
 
-    if (sec.deep) {
-      const deepWrap = el("div", { class:"deep hidden" , id:`deep_${mod}_${idx}`});
-      const deepList = el("ul");
-      sec.deep.forEach((t) => deepList.appendChild(el("li", {}, t)));
-      deepWrap.appendChild(el("div", { style:"font-weight:650; margin-bottom:6px;" }, "Materi lebih mendalam"), deepList);
+  // Data berupa STRING
+  const lines = data.split('\n').map(line => line.trim()).filter(l => l.length > 0)
 
-      const btn = el("button", {
-        class:"action secondary", type:"button",
-        onclick: () => {
-          deepWrap.classList.toggle("hidden");
-          btn.textContent = deepWrap.classList.contains("hidden") ? "Lihat materi lebih mendalam" : "Sembunyikan materi lebih mendalam";
-        }
-      }, "Lihat materi lebih mendalam");
+  lines.forEach((line, idx) => {
 
-      card.appendChild(btn);
-      card.appendChild(deepWrap);
+    // DETEKSI JUDUL MODUL
+    if (/^MODUL\s+\d+/i.test(line)) {
+      box.appendChild(
+        el("h2", { style: "margin:14px 0; font-size:22px; font-weight:700;" }, line)
+      )
+      return
     }
 
-    box.appendChild(card);
-  });
+    // DETEKSI JUDUL BESAR (uppercase dan panjang cukup)
+    if (line === line.toUpperCase() && line.length > 5) {
+      box.appendChild(
+        el("h3", { style: "margin:12px 0; font-size:18px; font-weight:700;" }, line)
+      )
+      return
+    }
+
+    // DETEKSI SUB-JUDUL (e.g. Pendahuluan, Penutup, dst)
+    // Pola: baris tanpa titik di akhir, huruf awal kapital
+    if (
+      /^[A-Z][A-Za-z\s]+$/.test(line) &&
+      (idx < lines.length - 1) &&
+      !lines[idx + 1].match(/^\w+:/) &&
+      lines[idx + 1].length > 50 // memastikan berikutnya adalah paragraf panjang
+    ) {
+      box.appendChild(
+        el("h3", { style: "margin:12px 0; font-size:18px; font-weight:700;" }, line)
+      )
+      return
+    }
+
+    // DEFAULT → paragraf
+    box.appendChild(
+      el("p", { style: "margin:6px 0 10px; line-height:1.55;" }, line)
+    )
+  })
 }
+
 
 /* ---------- Kuis ---------- */
 function setMode(mode) {

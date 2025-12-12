@@ -1,10 +1,10 @@
-/* Logic kuis + dynamic loader bank soal */
+/* Kuis + Dynamic loader + Ringkasan (Modul 1–6) — v2 */
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (k === "class") node.className = v;
     else if (k === "html") node.innerHTML = v;
-    else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+    else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2).toLowerCase(), v);
     else node.setAttribute(k, v);
   }
   for (const ch of children) {
@@ -35,15 +35,67 @@ let ORDER = [];
 let MODE = "ordered";
 let SHOW_EXPLANATION = true;
 
+/* ---------- Ringkasan data (loaded from summary_M1.js ... summary_M6.js) ---------- */
+const SUMMARY = (window.MODULE_SUMMARIES || {});
+
+function renderSummaryTabs(active = "M1") {
+  const tabs = document.getElementById("summaryTabs");
+  tabs.innerHTML = "";
+  ["M1","M2","M3","M4","M5","M6"].forEach((m) => {
+    const b = el("button", {
+      class: "sumTab" + (m === active ? " active" : ""),
+      type: "button",
+      onclick: () => { renderSummaryTabs(m); renderSummaryContent(m); }
+    }, m.replace("M","Modul "));
+    tabs.appendChild(b);
+  });
+}
+
+function renderSummaryContent(mod) {
+  const box = document.getElementById("summaryContent");
+  const data = SUMMARY[mod];
+  if (!data) { box.textContent = 'Ringkasan belum dimuat. Pastikan file summary_M'+mod+'.js sudah ter-load.'; return; }
+  box.innerHTML = "";
+
+  box.appendChild(el("div", { class:"q" }, data.title));
+
+  // sections
+  data.sections.forEach((sec, idx) => {
+    const card = el("div", { class:"card", style:"margin:12px 0;" });
+    card.appendChild(el("div", { style:"font-weight:700; margin-bottom:8px;" }, sec.h));
+    const list = el("ul");
+    (sec.items || []).forEach((t) => list.appendChild(el("li", {}, t)));
+    if (sec.items && sec.items.length) card.appendChild(list);
+
+    if (sec.deep) {
+      const deepWrap = el("div", { class:"deep hidden" , id:`deep_${mod}_${idx}`});
+      const deepList = el("ul");
+      sec.deep.forEach((t) => deepList.appendChild(el("li", {}, t)));
+      deepWrap.appendChild(el("div", { style:"font-weight:650; margin-bottom:6px;" }, "Materi lebih mendalam"), deepList);
+
+      const btn = el("button", {
+        class:"action secondary", type:"button",
+        onclick: () => {
+          deepWrap.classList.toggle("hidden");
+          btn.textContent = deepWrap.classList.contains("hidden") ? "Lihat materi lebih mendalam" : "Sembunyikan materi lebih mendalam";
+        }
+      }, "Lihat materi lebih mendalam");
+
+      card.appendChild(btn);
+      card.appendChild(deepWrap);
+    }
+
+    box.appendChild(card);
+  });
+}
+
+/* ---------- Kuis ---------- */
 function setMode(mode) {
   MODE = mode;
   ORDER = mode === "random" ? shuffle(QUESTIONS) : [...QUESTIONS];
   renderQuiz();
 }
-
-function setExplain(enabled) {
-  SHOW_EXPLANATION = enabled;
-}
+function setExplain(enabled) { SHOW_EXPLANATION = enabled; }
 
 function setQuestions(newQuestions) {
   QUESTIONS = Array.isArray(newQuestions) ? newQuestions : [];
@@ -64,16 +116,12 @@ function renderQuiz() {
   const modules = Object.keys(grouped);
 
   modules.forEach((m) => {
-    const section = el("section", { class: "module" },
-      el("h2", {}, `Modul ${String(m).replace("M","")}`)
-    );
+    const section = el("section", { class: "module" }, el("h2", {}, `Modul ${String(m).replace("M","")}`));
 
     grouped[m].forEach((item) => {
       const qIndex = ORDER.findIndex(q => q.id === item.id) + 1;
       const name = `q_${item.id}`;
-      const card = el("div", { class: "card", "data-qid": String(item.id) },
-        el("div", { class: "q" }, `${qIndex}. ${item.q}`)
-      );
+      const card = el("div", { class: "card", "data-qid": String(item.id) }, el("div", { class: "q" }, `${qIndex}. ${item.q}`));
 
       const optsWrap = el("div", { class: "opts" });
       item.opts.forEach((opt, oi) => {
@@ -83,11 +131,7 @@ function renderQuiz() {
         optsWrap.appendChild(el("div", { class: "opt" }, radio, label));
       });
 
-      const meta = el("div", { class: "meta" },
-        el("span", { class: "tag" }, m),
-        el("span", { class: "qid" }, `ID: ${item.id}`)
-      );
-
+      const meta = el("div", { class: "meta" }, el("span", { class: "tag" }, m), el("span", { class: "qid" }, `ID: ${item.id}`));
       const explain = el("div", { class: "explain hidden" }, item.exp || "");
       card.append(optsWrap, meta, explain);
       section.appendChild(card);
@@ -114,18 +158,11 @@ function grade() {
     card.classList.remove("correct", "wrong", "unanswered");
     explain.classList.add("hidden");
 
-    if (!chosen) {
-      card.classList.add("unanswered");
-      return;
-    }
+    if (!chosen) { card.classList.add("unanswered"); return; }
 
     const val = Number(chosen.value);
-    if (val === item.a) {
-      correct++;
-      card.classList.add("correct");
-    } else {
-      card.classList.add("wrong");
-    }
+    if (val === item.a) { correct++; card.classList.add("correct"); }
+    else { card.classList.add("wrong"); }
 
     if (SHOW_EXPLANATION && item.exp) explain.classList.remove("hidden");
   });
@@ -171,18 +208,60 @@ function loadBank(file) {
   });
 }
 
+/* ---------- Navigasi ---------- */
+function setView(which) {
+  const vQuiz = document.getElementById("viewQuiz");
+  const vSum = document.getElementById("viewSummary");
+  const bQuiz = document.getElementById("navQuiz");
+  const bSum = document.getElementById("navSummary");
+
+  if (which === "summary") {
+    vQuiz.classList.remove("active");
+    vSum.classList.add("active");
+    bQuiz.classList.remove("active");
+    bSum.classList.add("active");
+  } else {
+    vSum.classList.remove("active");
+    vQuiz.classList.add("active");
+    bSum.classList.remove("active");
+    bQuiz.classList.add("active");
+  }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
+  // nav
+  document.getElementById("navQuiz").addEventListener("click", () => setView("quiz"));
+  document.getElementById("navSummary").addEventListener("click", () => setView("summary"));
+
+  // summary init
+  renderSummaryTabs("M1");
+  renderSummaryContent("M1");
+
+  // desktop controls
   document.getElementById("btnGrade").addEventListener("click", grade);
   document.getElementById("btnReset").addEventListener("click", resetQuiz);
   document.getElementById("modeOrdered").addEventListener("click", () => setMode("ordered"));
   document.getElementById("modeRandom").addEventListener("click", () => setMode("random"));
   document.getElementById("toggleExplain").addEventListener("change", (e) => setExplain(e.target.checked));
-
   const sel = document.getElementById("questionSet");
-  sel.addEventListener("change", async () => {
-    resetQuiz();
-    await loadBank(sel.value);
+  sel.addEventListener("change", async () => { resetQuiz(); await loadBank(sel.value); });
+
+  // mobile controls mirror
+  document.getElementById("btnGrade_m").addEventListener("click", grade);
+  document.getElementById("btnReset_m").addEventListener("click", resetQuiz);
+  document.getElementById("modeOrdered_m").addEventListener("click", () => setMode("ordered"));
+  document.getElementById("modeRandom_m").addEventListener("click", () => setMode("random"));
+  document.getElementById("toggleExplain_m").addEventListener("change", (e) => {
+    setExplain(e.target.checked);
+    document.getElementById("toggleExplain").checked = e.target.checked;
   });
+  const selm = document.getElementById("questionSet_m");
+  selm.addEventListener("change", async () => {
+    document.getElementById("questionSet").value = selm.value;
+    resetQuiz();
+    await loadBank(selm.value);
+  });
+  sel.addEventListener("change", () => { selm.value = sel.value; });
 
   await loadBank(sel.value);
 });
